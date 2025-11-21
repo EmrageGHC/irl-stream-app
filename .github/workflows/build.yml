@@ -34,13 +34,31 @@ jobs:
         pip install --upgrade pip
         pip install buildozer==1.5.0 cython==0.29.36
     
-    - name: Build APK with Buildozer (with retry)
-      uses: nick-fields/retry-action@v2
-      with:
-        timeout_minutes: 45
-        max_attempts: 3
-        retry_wait_seconds: 30
-        command: yes | buildozer android debug
+    - name: Build APK with retries
+      run: |
+        set -euo pipefail
+        MAX_ATTEMPTS=3
+        RETRY_WAIT_SECONDS=30
+        CMD='yes | buildozer android debug'
+
+        attempt=1
+        while [ $attempt -le $MAX_ATTEMPTS ]; do
+          echo "=== Build attempt $attempt/$MAX_ATTEMPTS ==="
+          if bash -c "$CMD"; then
+            echo "✅ Build succeeded on attempt $attempt"
+            exit 0
+          fi
+          echo "❌ Build failed on attempt $attempt"
+          if [ $attempt -lt $MAX_ATTEMPTS ]; then
+            sleep_seconds=$((RETRY_WAIT_SECONDS * attempt))
+            echo "⏱️  Waiting ${sleep_seconds}s before next attempt..."
+            sleep "$sleep_seconds"
+          fi
+          attempt=$((attempt + 1))
+        done
+
+        echo "❌ ERROR: All $MAX_ATTEMPTS build attempts failed"
+        exit 1
     
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
